@@ -29,6 +29,14 @@ jobs:
 
       - name: verify WAR file
         run: ls -lh target/
+
+      # SonarQube Analysis # ------------------------- 
+      - name: SonarQube Scan 
+        run: | 
+          mvn sonar:sonar \ 
+          -Dsonar.projectKey=TrainBook \ 
+          -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \ 
+          -Dsonar.login=${{ secrets.SONAR_TOKEN }}
         
       - name: Configure Maven settings.xml for Nexus
         run: |
@@ -47,3 +55,9 @@ jobs:
 
       - name: Upload Artifact to Nexus
         run: mvn deploy -DaltDeploymentRepository=nexus::default::${{ secrets.NEXUS_REPO_URL }}
+      # Deploy to Tomcat # ------------------------- 
+      - name: Deploy WAR to Tomcat 
+        run: | 
+          curl -u ${{ secrets.TOMCAT_USERNAME }}:${{ secrets.TOMCAT_PASSWORD }} \ 
+          -T target/*.war \ 
+          "http://${{ secrets.TOMCAT_HOST }}:8080/manager/text/deploy?path=/TrainBook&update=true"
