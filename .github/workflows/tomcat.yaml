@@ -1,56 +1,49 @@
-name: Build and Publish to Nexus
-
-on:
+name: ci/cd pipeline to deploy to tomcat
+on: 
   push:
-    branches: [ "master" ]
-  workflow_dispatch:
-
+    branches: master
 jobs:
-  publish:
+  build-deploy:
     runs-on: ubuntu-latest
-
-    env:
-      # Example: https://nexus.example.com
-      NEXUS_URL: ${{ secrets.NEXUS_URL }}
-      # Example: maven-releases / maven-snapshots / npm-hosted etc.
-      NEXUS_REPOSITORY: ${{ secrets.NEXUS_REPOSITORY }}
-      # Optional Maven group/artifact override if needed
-      # GROUP_ID: com.example
-      # ARTIFACT_ID: my-app
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up JDK
-        uses: actions/setup-java@v4
+      - name: checkout code
+        uses: actions/checkout@v3
+      
+      - name: set-up jdk
+        uses: actions/setup-java@v3
         with:
-          distribution: temurin
-          java-version: "17"
+          distribution: 'temurin'
+          java-version: '17'   # Updated Java version
+      
+      - name: validate with maven
+        run: mvn validate
 
-      - name: Build (Maven)
-        run: mvn -B clean package
+      - name: compile with maven
+        run: mvn compile
+      
+      - name: test with maven
+        run: mvn test
+      
+      - name: package with maven
+        run: mvn clean package
 
-      - name: Publish to Nexus (Maven deploy)
-        env:
-          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
-          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+      - name: verify WAR file
+        run: ls -lh target/
+        
+      - name: Configure Maven settings.xml for Nexus
         run: |
           mkdir -p ~/.m2
-          cat > ~/.m2/settings.xml <<EOF
-          <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
-                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-                    xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
+          cat <<EOF > ~/.m2/settings.xml
+          <settings>
             <servers>
               <server>
                 <id>nexus</id>
-                <username>${NEXUS_USERNAME}</username>
-                <password>${NEXUS_PASSWORD}</password>
+                <username>${{ secrets.NEXUS_USERNAME }}</username>
+                <password>${{ secrets.NEXUS_PASSWORD }}</password>
               </server>
             </servers>
           </settings>
           EOF
 
-          mvn -B deploy \
-            -DskipTests \
-            -DaltDeploymentRepository=nexus::default::${NEXUS_URL}/repository/${NEXUS_REPOSITORY}/
+      - name: Upload Artifact to Nexus
+        run: mvn deploy -DaltDeploymentRepository=nexus::default::${{ secrets.NEXUS_REPO_URL }}
