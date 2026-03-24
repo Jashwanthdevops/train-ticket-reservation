@@ -1,35 +1,57 @@
-name: deploy war file to tomcat
+name: Build and Publish to Nexus
+
 on:
- push:
-  branches: master
+  push:
+    branches: [ "main" ]
+    tags: [ "v*" ]
+  workflow_dispatch:
+
 jobs:
- build-deploy:
-  runs-on: ubuntu-latest
-  steps:
-    - name: checkout code
-      uses: actions/checkout@v3
-    
-    - name: set-up jdk
-      uses: actions/setup-java@v3
-      with:
-       distribution: 'temurin'
-       java-version: '17'
-    - name: validate with maven
-      run : mvn validate 
-    - name: compile with maven
-      run : mvn compile 
-    - name: test with maven
-      run : mvn test   
-    - name: package with maven
-      run : mvn package 
-    - name: deploy war to tomcat
-      run : |
-              curl -v -u ${{ secrets.TOMCAT_USER }}:${{ secrets.TOMCAT_PASSWORD }} \
-                -T target/TrainBook-1.0.0-SNAPSHOT.war \
-                "http://${{ secrets.TOMCAT_HOST}}:8080/manager/text/deploy?path=/TrainBook&update=true"
-   
+  publish:
+    runs-on: ubuntu-latest
 
+    env:
+      # Example: https://nexus.example.com
+      NEXUS_URL: ${{ secrets.NEXUS_URL }}
+      # Example: maven-releases / maven-snapshots / npm-hosted etc.
+      NEXUS_REPOSITORY: ${{ secrets.NEXUS_REPOSITORY }}
+      # Optional Maven group/artifact override if needed
+      # GROUP_ID: com.example
+      # ARTIFACT_ID: my-app
 
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
 
+      - name: Build (Maven)
+        run: mvn -B clean package
 
+      - name: Publish to Nexus (Maven deploy)
+        env:
+          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
+          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
+        run: |
+          mkdir -p ~/.m2
+          cat > ~/.m2/settings.xml <<EOF
+          <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                    xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
+            <servers>
+              <server>
+                <id>nexus</id>
+                <username>${NEXUS_USERNAME}</username>
+                <password>${NEXUS_PASSWORD}</password>
+              </server>
+            </servers>
+          </settings>
+          EOF
+
+          mvn -B deploy \
+            -DskipTests \
+            -DaltDeploymentRepository=nexus::default::${NEXUS_URL}/repository/${NEXUS_REPOSITORY}/
