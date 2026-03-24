@@ -3,7 +3,6 @@ name: Build and Publish to Nexus
 on:
   push:
     branches: [ "master" ]
-    tags: [ "v*" ]
   workflow_dispatch:
 
 jobs:
